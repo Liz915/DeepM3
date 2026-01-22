@@ -1,6 +1,7 @@
 <p align="right">
   <a href="README_zh.md">中文</a> | <strong>English</strong>
 </p>
+
 # DeepM3: Dynamic System-2 Scaling for Recommender Systems
 
 ![cover](assets/cover.png)
