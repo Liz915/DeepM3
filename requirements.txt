@@ -1,0 +1,13 @@
+torch>=2.0.0
+numpy
+pandas
+scikit-learn
+fastapi
+uvicorn
+pydantic
+requests
+pyyaml
+prometheus_client
+peft>=0.9.0
+faiss-cpu
+matplotlib

@@ -1,0 +1,25 @@
+# ==========================================
+# DeepM3 Configuration Template
+# ==========================================
+# Rename this file to 'config.yaml' to use it.
+
+data:
+  input_dim: 384          # Visual embedding dimension (e.g., CLIP output)
+  max_seq_len: 20         # Maximum user history length
+  data_path: "data/processed.pt"
+
+model:
+  hidden_dim: 128         # Latent state dimension (z_t)
+  ode_solver: "rk4"       # Options: 'rk4' (Recommended for stability), 'euler' (Faster)
+  dropout: 0.1            # Regularization
+  
+  # [Advanced] Neural ODE specific settings
+  tol: 1e-3               # Error tolerance for adaptive solvers (if used)
+
+train:
+  batch_size: 64
+  learning_rate: 0.001
+  weight_decay: 1e-5
+  epochs: 10
+  log_interval: 10
+  device: "auto"          # auto, cuda, mps, cpu

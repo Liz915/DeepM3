@@ -1,0 +1,72 @@
+# ==========================
+# 1. Python & System Junk
+# ==========================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.DS_Store
+
+# ==========================
+# 2. Security 
+# ==========================
+.env
+.env.local
+*.key
+*.pem
+
+# ==========================
+# 3. Data & Large Files
+# ==========================
+data/raw/
+data/processed.pt
+*.zip
+*.csv
+# 保留 nano_traffic_test.sh 等小脚本
+
+# ==========================
+# 4. Models & Weights 
+# ==========================
+checkpoints/
+*.pth
+*.pt
+*.safetensors
+*.bin
+*.ckpt
+*.h5
+*.onnx
+
+# ==========================
+# 5. Logs & Monitoring
+# ==========================
+logs/
+runs/
+results/
+# 忽略 Grafana 的本地存储（里面有很多临时文件）
+grafana_storage/
+# 如果未来加了 Prometheus 持久化，也忽略
+prometheus_data/
+
+# ==========================
+# 6. IDE Settings (VS Code / PyCharm)
+# ==========================
+.vscode/
+.idea/
+
+# ==========================
+# 7. Assets Logic (精细控制)
+# ==========================
+# 忽略根目录下所有的 json (防止误传临时数据)
+*.json
+
+# 但是！必须保留 assets 文件夹里的 dashboard 和截图
+!assets/
+!assets/*.json
+!assets/*.png
+!assets/*.jpg
+
+# 保留根目录的配置 json (如果有的话，没有可忽略)
+!tsconfig.json
