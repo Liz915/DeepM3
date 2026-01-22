@@ -1,6 +1,14 @@
+<p align="right">
+  <a href="README_zh.md">中文</a> | <strong>English</strong>
+</p>
 # DeepM3: Dynamic System-2 Scaling for Recommender Systems
 
 ![cover](assets/cover.png)
+
+*Figure: DeepM3 architecture. A continuous-time user dynamics model (System 1)
+handles the majority of requests under strict latency constraints, while an
+adaptive router selectively escalates uncertain cases to a reasoning agent
+(System 2).*
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)
@@ -9,6 +17,7 @@
 > A hybrid recommender system that combines continuous-time user dynamics (System 1)
 > with selective LLM reasoning (System 2), designed for low latency, low cost,
 > and stable behavior under real-world traffic.
+
 This repository provides a **fully containerized, reproducible implementation** with built-in monitoring and experiment scripts.
 
 ## 📊 Live System Monitoring (Built-in)
@@ -22,6 +31,10 @@ DeepM3 ships with a pre-configured Prometheus + Grafana stack.
 </div>
 
 ## 🏗 Architecture Overview
+
+This design addresses a core production challenge: 
+serving the majority of traffic with strict latency budgets,
+while preserving reasoning capability for long-tail uncertainty cases.
 
 DeepM3 follows a **System 1 / System 2** cognitive architecture:
 
@@ -89,15 +102,30 @@ curl -X POST http://localhost:8000/recommend \
     ]
   },
   "strategy": "Adaptive_ODE_Agent",
-  "latency": "0.29ms"
+  "latency": "0.48ms (API response time, mock mode)"
 }
 ```
+> **Note**
+> The example requests intentionally trigger the slow path to demonstrate
+> System 2 behavior. Under typical traffic, over 80% of requests are served by
+> System 1.
 
-**Note:** In the default Mock Mode, the system returns structured responses instantly (<1ms) to verify high-throughput routing logic. Real-world latency (~1s) applies when a valid API Key is provided.
+**Latency Note**
+
+The reported `latency` refers to the end-to-end API response time measured at
+the FastAPI layer.
+
+- In **Mock Mode**, the reasoning module returns immediately (or with optional
+  simulated delay), resulting in sub-millisecond latency. This is intentional
+  for validating routing logic, caching behavior, and system throughput.
+- In **Real Mode**, System 2 latency reflects actual LLM inference time
+  (typically ~1–2s), while System 1 remains at millisecond scale.
 
 ### 3. Traffic Simulation & Monitoring
 To visualize routing behavior and cache dynamics in Grafana, run the traffic generator:
-```bash sh nano_traffic_test.sh ```
+```bash
+sh nano_traffic_test.sh
+```
 
 **Access Dashboard:**
 - URL: `http://localhost:3000`
@@ -138,10 +166,10 @@ python scripts/experiments/exp_alignment.py
 DeepM3/
 ├── src/
 │ ├── api.py # Unified FastAPI entrypoint
-│ ├── agent/
+│ ├── agent/ # System 2: LLM reasoning agent & tools
 │ │ ├── router.py # Entropy-based adaptive router
 │ │ └── tools_deepseek.py # LLM Interface (Mock/Real)
-│ ├── dynamics/ # Neural ODE models (torchdiffeq)
+│ ├── dynamics/ # System 1: Neural ODE models (torchdiffeq)
 │ └── data/ # Dataset loaders
 ├── scripts/
 │ ├── experiments/ # Reproducibility benchmark scripts
@@ -161,5 +189,5 @@ If you use this code for research purposes, please cite:
   title   = {Stabilizing Latent User Dynamics via Hybrid Agentic Control},
   author  = {Zixu Li},
   year    = {2026},
-  note    = {Manuscript in Prepa}
+  note    = {Manuscript in Preparation}
 } ```
