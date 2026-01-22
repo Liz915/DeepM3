@@ -4,7 +4,10 @@
 
 # DeepM3: Dynamic System-2 Scaling for Recommender Systems
 
-![cover](assets/cover.png)
+<div align="center">
+  <img src="assets/cover.png" width="70%" alt="DeepM3 Architecture" />
+</div>
+
 
 *Figure: DeepM3 architecture. A continuous-time user dynamics model (System 1)
 handles the majority of requests under strict latency constraints, while an
