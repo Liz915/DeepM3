@@ -4,7 +4,9 @@
 
 # DeepM3：用于推荐系统的动态 System-2 扩展架构
 
-![cover](assets/cover.png)
+<div align="center">
+  <img src="assets/cover.png" width="70%" alt="DeepM3 Architecture" />
+</div>
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)
