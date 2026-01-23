@@ -180,8 +180,8 @@ if __name__ == "__main__":
     # 3. 打印报告
     print("\n===== Routing Ablation Results =====")
     print(f"Total samples: {len(dataset)}\n")
-    print(f"{'Method':<18} {'Accuracy':<10} {'Avg Latency (ms)':<15}")
-    print("-" * 45)
+    print(f"{'Method':<25} {'Accuracy':<15} {'Avg Latency (ms)':<20}")
+    print("-" * 65)
 
     for method, (acc, lat) in metrics.items():
-        print(f"{method:<18} {acc:.3f}       {lat:.2f}")
+        print(f"{method:<25} {acc:<15.3f} {lat:<20.2f}")

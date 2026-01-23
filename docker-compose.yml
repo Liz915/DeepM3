@@ -7,8 +7,13 @@ services:
     container_name: deep-m3-api
     ports:
       - "8000:8000"
+    volumes:
+      - ./src:/app/src
+      - ./logs:/app/logs
+      - ./assets:/app/assets
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - MOCK_LATENCY_ENABLED=true
     networks:
       - monitor-net
 

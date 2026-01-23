@@ -357,6 +357,32 @@
       "title": "QPS",
       "type": "timeseries"
     }
+    ,
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisLabel": "Ratio", "axisPlacement": "right" },
+          "max": 1,
+          "min": 0,
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 100,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "sum(rate(api_requests_total{strategy=~\"slow_path.*\"}[1m])) / sum(rate(api_requests_total[1m]))",
+          "legendFormat": "Slow Path Ratio (Cost Proxy)",
+          "refId": "A"
+        }
+      ],
+      "title": "System 2 Load Ratio (Budget Monitor)",
+      "type": "timeseries"
+    }
+
   ],
   "preload": false,
   "schemaVersion": 42,

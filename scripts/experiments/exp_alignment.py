@@ -55,10 +55,10 @@ if __name__ == "__main__":
 
     total = len(EVAL_CASES)
 
-    print("\n===== Alignment Ablation =====")
+    print("\n===== Alignment Ablation (DPO) =====")
     print(f"Total cases: {total}\n")
 
-    print("Metric                     Base Model    Reason-M3 (DPO)")
-    print("-" * 55)
-    print(f"JSON Error Rate            {base['json_error']/total:.2%}        {dpo['json_error']/total:.2%}")
-    print(f"L3 Override Failure Rate   {base['l3_fail']/total:.2%}        {dpo['l3_fail']/total:.2%}")
+    print(f"{'Metric':<30} {'Base Model':<20} {'Deep-M3 (DPO)':<20}")
+    print("-" * 75)
+    print(f"{'JSON Error Rate':<30} {base['json_error']/total:<20.2%} {dpo['json_error']/total:<20.2%}")
+    print(f"{'L3 Override Failure Rate':<30} {base['l3_fail']/total:<20.2%} {dpo['l3_fail']/total:<20.2%}")
