@@ -15,7 +15,7 @@ DATA_FILE = "assets/dpo_dataset_final.jsonl"
 
 # 训练配置
 NUM_EPOCHS = 3
-BATCH_SIZE = 1           # M1 显存吃紧，设为 1 最稳
+BATCH_SIZE = 1           # M1 显存吃紧，Batch Size 只能设 1
 GRAD_ACCUM = 8           # 梯度累积，等效 Batch Size = 8
 LEARNING_RATE = 1e-5     # DPO 标准学习率
 
@@ -45,7 +45,7 @@ def main():
     tokenizer.pad_token = tokenizer.eos_token
 
     # 4. 加载模型
-    # [Fix] 使用 torch.float32 保证 MPS 绝对稳定 (0.5B 模型 FP32 也就 2GB 显存，M1 扛得住)
+    # 使用 torch.float32 保证 MPS 绝对稳定 (0.5B 模型 FP32 也就 2GB 显存，M1 扛得住)
     print("🤖 Loading Model (FP32)...")
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_ID,
@@ -54,7 +54,7 @@ def main():
     ).to(device)
 
     # 5. LoRA 配置 (全量 Linear 层)
-    # [Fix] 补全 Qwen 的 MLP 层，效果更好
+    # 补全 Qwen 的 MLP 层，效果更好
     peft_config = LoraConfig(
         r=16,
         lora_alpha=32,
@@ -65,7 +65,7 @@ def main():
             "q_proj", "k_proj", "v_proj", "o_proj", 
             "gate_proj", "up_proj", "down_proj"
         ],
-        use_dora=False # [Fix] 关闭 DoRA，提升 MPS 训练速度
+        use_dora=False # 关闭 DoRA，提升 MPS 训练速度
     )
 
     # 6. 训练参数
@@ -76,7 +76,7 @@ def main():
         learning_rate=LEARNING_RATE,
         num_train_epochs=NUM_EPOCHS,
         
-        # [Fix] 关闭混合精度，防止 MPS 报错 (速度慢点但能跑完)
+        # 关闭混合精度，防止 MPS 报错 (速度慢点但能跑完)
         fp16=False,
         bf16=False,
         
@@ -92,7 +92,7 @@ def main():
     print("🔥 Initializing DPO Trainer...")
     trainer = DPOTrainer(
         model=model,
-        ref_model=None, # [Fix] 显式设为 None，让 TRL 内部处理 Reference
+        ref_model=None, # 显式设为 None，让 TRL 内部处理 Reference
         args=training_args,
         train_dataset=dataset,
         processing_class=tokenizer, # 参数名已修正

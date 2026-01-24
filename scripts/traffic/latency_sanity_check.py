@@ -32,7 +32,7 @@ time.sleep(1.5)
 print("🚀 Testing L1 Latency...")
 hits = []
 for i in range(10):
-    # 现在应该全是 Hit 了
+
     hits.append(measure("user_hot", [1, 2, 3], "L1_HIT"))
 
 print(f"\n🏆 Average L1 Latency: {np.mean(hits):.2f} ms")

@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 sys.path.append(os.getcwd())
-from src.data.dataset import RealDataDataset
+from src.data.dataset import UserBehaviorDataset
 from src.dynamics.modeling import DeepM3Model
 
 def compute_metrics(logits, targets, k=10):
@@ -30,7 +30,14 @@ def evaluate(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     
     # Data
-    val_ds = RealDataDataset("data/processed.pt", is_train=False)
+    try:
+        val_ds = UserBehaviorDataset(mode='test', config=cfg)
+        # 获取 n_items 用于模型初始化
+        n_items = val_ds.n_items
+    except Exception as e:
+        print(f"❌ Data Load Error: {e}")
+        return
+    
     val_loader = DataLoader(val_ds, batch_size=64, shuffle=False, num_workers=0)
     
     # Model

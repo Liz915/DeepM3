@@ -1,46 +1,33 @@
 import torch
-import torch.nn as nn
 
-class ODESolver(nn.Module):
+class ODESolver(object):
     def __init__(self, func):
-        super().__init__()
         self.func = func
 
-    def rk4_step(self, z0, t0, dt):
+    def rk4_step(self, h, t, dt):
         """
-        z0: [batch, dim]
-        t0: [batch, 1]  <-- 必须保持二维
-        dt: [batch, 1]
+        Runge-Kutta 4 阶积分法 (精度最高)
+        h: 当前状态 [Batch, Hidden]
+        t: 当前时间 [Batch, 1]
+        dt: 时间步长 [Batch, 1]
         """
-        # k1
-        k1 = self.func(t0, z0)
+        # k1 = f(t, h)
+        k1 = self.func(t, h)
         
-        # k2: t0 + dt/2
-        k2 = self.func(t0 + dt * 0.5, z0 + dt * k1 * 0.5)
+        # k2 = f(t + 0.5*dt, h + 0.5*dt*k1)
+        k2 = self.func(t + 0.5 * dt, h + 0.5 * dt * k1)
         
-        # k3: t0 + dt/2
-        k3 = self.func(t0 + dt * 0.5, z0 + dt * k2 * 0.5)
+        # k3 = f(t + 0.5*dt, h + 0.5*dt*k2)
+        k3 = self.func(t + 0.5 * dt, h + 0.5 * dt * k2)
         
-        # k4: t0 + dt
-        k4 = self.func(t0 + dt, z0 + dt * k3)
+        # k4 = f(t + dt, h + dt*k3)
+        k4 = self.func(t + dt, h + dt * k3)
         
-        return z0 + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+        return h + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
 
-    def forward(self, z0, t_span):
+    def euler_step(self, h, t, dt):
         """
-        t_span: [batch, seq_len]
+        欧拉积分法 
         """
-        batch_size, seq_len = t_span.shape
-        z_t = [z0]
-        curr_z = z0
-        
-        for i in range(seq_len - 1):
-            t_curr = t_span[:, i].unsqueeze(1)
-            t_next = t_span[:, i+1].unsqueeze(1)
-            dt = t_next - t_curr 
-            
-            # 这里的 dt 已经是 [B, 1] 了
-            curr_z = self.rk4_step(curr_z, t_curr, dt)
-            z_t.append(curr_z)
-            
-        return torch.stack(z_t, dim=1)
+        dh = self.func(t, h)
+        return h + dh * dt

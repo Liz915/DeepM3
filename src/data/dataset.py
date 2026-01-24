@@ -60,7 +60,7 @@ class UserBehaviorDataset(Dataset):
         x = torch.tensor(items[:-1], dtype=torch.long)
         y = torch.tensor(items[1:], dtype=torch.long) # 简单的 Next Item 监督
         
-        # [关键修复] 时间戳处理
+        # 时间戳处理
         t_raw = np.array(times[:-1], dtype=np.float32)
         
         # 强制单调递增 (Monotonicity Check)

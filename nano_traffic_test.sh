@@ -1,31 +1,35 @@
-echo "🚀 Starting Logically Correct Traffic (L1/L2/L3)..."
+echo "🚀 Starting DeepM3 Mixed Traffic (Alternating: Cold Start <-> Hot Cache)..."
+echo "📊 Check Grafana at http://localhost:3000 (Time range: Last 5 minutes)"
 
-FIXED_CHAOS_USER="user_chaos_fixed_007"
-CHAOS_BODY='{"user_id":"user_chaos_fixed_007","recent_items":[10, 300, 5, 1000, 50], "recent_times":[0.1, 2.5, 3.1, 8.0, 15.2] }'
-STABLE_BODY='{"user_id":"user_stable_loop","recent_items":[1,1,1,1,1], "recent_times":[0.1,0.1,0.1,0.1,0.1]}'
+# ==========================================
+# Payload 定义
+# ==========================================
+# 1. 固定用户 (用于命中 System 1 / Cache)
+FIXED_PAYLOAD='{"user_id":"vip_fixed_user","recent_items":[1,2],"recent_times":[0.1,0.2]}'
 
 while true; do
-    # 1) L3 Slow Path（必 miss）
-    curl -s -o /dev/null -X POST http://localhost:8000/recommend \
-        -H "Content-Type: application/json" \
-        -d "$CHAOS_BODY"
+  # ==========================================
+  # A. 发送随机新用户
+  # 预期: Cache Miss -> Router -> System 2 (~800ms)
+  # ==========================================
+  RANDOM_USER="user_$(date +%s)_$RANDOM"
+  # 注意：这里不加 X-Demo-Mode Header，让系统自动路由
+  curl -s -o /dev/null -X POST http://localhost:8000/recommend \
+    -H "Content-Type: application/json" \
+    -d "{\"user_id\":\"$RANDOM_USER\", \"recent_items\":[1,2], \"recent_times\":[0.1, 0.2]}"
 
-    # 2) 等后台写缓存（0.6 就够）
-    sleep 0.6
+  # ==========================================
+  # B. 发送固定老用户
+  # 预期: Cache Hit -> System 1 (<2ms)
+  # ==========================================
+  curl -s -o /dev/null -X POST http://localhost:8000/recommend \
+    -H "Content-Type: application/json" \
+    -d "$FIXED_PAYLOAD"
 
-    # 3) L1 Cache Hit（三次稳定命中）
-    for i in {1..3}; do
-        curl -s -o /dev/null -X POST http://localhost:8000/recommend \
-            -H "Content-Type: application/json" \
-            -d "$CHAOS_BODY"
-    done
-
-    # 4) L2 Fast Path（提高 QPS + 让图更好看）
-    for i in {1..5}; do
-        curl -s -o /dev/null -X POST http://localhost:8000/recommend \
-            -H "Content-Type: application/json" \
-            -d "$STABLE_BODY"
-    done
-
-    echo -n "."
+  # ==========================================
+  # C. 进度条与频率控制
+  # ==========================================
+  echo -n "."
+  # 0.2秒间隔，保证 QPS 不会太低，同时给 Grafana 足够的数据点
+  sleep 0.2 
 done
