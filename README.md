@@ -56,6 +56,16 @@ Unlike traditional RNNs, DeepM3 models user preference evolution as a continuous
 
 *Figure: Visualization of user latent dynamics. The **Attractor** (spiral center) represents the user's stable interest core, while the trajectory points capture real-time intent shifts governed by the Neural ODE equation.*
 
+### ⚡ L1 Visual Semantic Cache (Multimodal Optimization)
+
+To handle the high computational cost of visual encoders (e.g., CLIP) without sacrificing latency, DeepM3 implements a **Level-1 Visual Cache**:
+
+- **Mechanism**: Hashes image inputs (MD5) to serve as distinct semantic keys.
+- **Benefit**: 
+    - **Cache Hit**: Returns pre-computed visual tags instantly (<1ms).
+    - **Cache Miss**: Routes to the Vision Tool only for novel inputs.
+- **Observability**: Real-time Hit/Miss rates are tracked via Prometheus (`visual_cache_ops`).
+
 ### 2. System 2: Reasoning Agent (Slow Path)
 An agent-based reasoning module (DeepSeek/OpenAI) is activated only for long-tail/uncertain queries. It performs chain-of-thought reasoning to resolve multimodal conflicts.
 
@@ -101,6 +111,21 @@ curl -X POST http://localhost:8000/recommend \
 -d '{"user_id":"vip_user", "recent_items":[1,2], "recent_times":[0.1,0.2]}'
 ```
 **Response: Simulated reasoning delay (695.84ms). routing_decision:"slow_path".**
+
+**Scenario C : Multimodal Safety Guard (Visual Override)**
+Simulate a request containing a visual anomaly (e.g., an error log screenshot), triggering the Safety Circuit Breaker.
+
+```bash
+curl -X POST http://localhost:8000/recommend \
+-H "Content-Type: application/json" \
+-d '{
+    "user_id": "tester", 
+    "recent_items":[1], 
+    "recent_times":[0.1], 
+    "image_input": "screenshot_error_log.png"
+}'
+```
+**Response**: System 2 activated despite low entropy. routing_decision:"slow_path", trace includes visual_override.
 
 ### 3. Traffic Simulation
 ```bash

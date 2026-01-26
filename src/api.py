@@ -11,14 +11,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Header
 from pydantic import BaseModel
 from prometheus_client import Counter, Histogram, make_asgi_app
-
-# System Imports
+from src.perception.visual_cache import visual_cache
 from src.agent.tools_deepseek import DeepSeekReasoner
 from src.dynamics.modeling import DeepM3Model
 from src.agent.core import AgentOrchestrator
 
 # ==========================================
-# Metrics Definition (P7+ Observability)
+# Metrics Definition
 # ==========================================
 # 1. Latency: 必须带 strategy 标签，才能在 Grafana 画出两条线
 REQUEST_LATENCY = Histogram(
@@ -109,6 +108,13 @@ async def recommend(
     if not agent: raise HTTPException(503, "System Initializing")
 
     # ==========================================
+    # L1 Visual Cache Layer (感知层)
+    # ==========================================
+    visual_context = None
+    if req.image_input:
+        visual_context = visual_cache.get_analysis(req.image_input)
+
+    # ==========================================
     # Cache Logic (Simplified for Demo)
     # ==========================================
     # 为了演示效果，Cache Key 只看 User ID。
@@ -124,7 +130,17 @@ async def recommend(
     # ==========================================
     # Reasoning Logic
     # ==========================================
-    if cached_result:
+    force_strategy = None
+    
+    # 2. Header 强制控制 (Demo Mode)
+    if x_demo_mode == "force_fast": force_strategy = "fast_path"
+    if x_demo_mode == "force_slow": force_strategy = "slow_path"
+    if visual_context and visual_context.get("contains_error_trace", False):
+        print("🛡️ [Safety Guard] Visual anomaly detected! Override -> Slow Path.")
+        force_strategy = "slow_path"
+
+    if cached_result and not force_strategy == "slow_path": # 缓存命中且未被熔断
+    
         # Cache Hit -> Fast Return (L1)
         final_res = cached_result
         reasoning_source = "cache_hit (L1)"
@@ -135,6 +151,8 @@ async def recommend(
             "history_items": torch.tensor([req.recent_items], dtype=torch.long),
             "history_times": torch.tensor([req.recent_times], dtype=torch.float32),
             "image_input": req.image_input,
+            "visual_analysis": visual_context,
+            "force_strategy": force_strategy,
             "demo_mode": x_demo_mode
         }
         

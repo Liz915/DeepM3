@@ -48,6 +48,20 @@ DeepM3 内置了预配置的 Prometheus + Grafana 监控栈。
 
 *图示：用户潜在动力学可视化。**吸引子 (Attractor)** 代表用户的稳定核心兴趣，而轨迹点捕捉了由 ODE 方程驱动的实时意图漂移。*
 
+### ⚡ L1 视觉语义缓存 (多模态优化)
+
+为了在不牺牲延迟的前提下处理高昂的视觉编码成本（如 CLIP），DeepM3 引入了 **Level-1 视觉缓存层**：
+
+- **机制**：对图像输入进行哈希 (MD5) 计算，作为唯一的语义键值。
+- **收益**：
+    - **Cache Hit (命中)**：瞬间返回预计算的视觉标签 (<1ms)，完全绕过模型推理。
+    - **Cache Miss (未命中)**：仅针对全新图片路由至视觉工具进行编码。
+- **可观测性**：通过 Prometheus (`visual_cache_ops`) 实时追踪命中/未命中率。
+
+### 🛡️ 视觉熔断机制 (安全卫士)
+
+系统内置了基于语义感知的**安全断路器 (Safety Circuit Breaker)**。当感知层检测到异常视觉信号（如包含 `Error Log`、`Traceback` 的截图）时，即使 Neural ODE 判定为低熵（简单）请求，Router 也会**强制覆盖**策略，将请求路由至 System 2 进行深度安全审查。
+
 ### 2. System 2: 推理 Agent (慢路径)
 一个基于 Agent 的推理模块 (DeepSeek/OpenAI)，仅针对长尾或低置信度查询激活。它执行思维链 (CoT) 推理以解决跨模态冲突。
 
@@ -74,19 +88,37 @@ DeepM3 支持基于 Header 的路由控制，无需更改代码即可进行安�
 ```bash curl -X POST http://localhost:8000/recommend \
 -H "Content-Type: application/json" \
 -H "X-Demo-Mode: force_fast" \
--d '{"user_id":"demo_user", "recent_items":[1,2], "recent_times":[0.1,0.2]}' ```
+-d '{"user_id":"demo_user", "recent_items":[1,2], "recent_times":[0.1,0.2]}' 
+```
 响应: 瞬间返回 (0.64ms)。 routing_decision: "fast_path"。
 
 **场景 B: 强制走慢路 (System 2)**
 ```bash curl -X POST http://localhost:8000/recommend \
 -H "Content-Type: application/json" \
 -H "X-Demo-Mode: force_slow" \
--d '{"user_id":"vip_user", "recent_items":[1,2], "recent_times":[0.1,0.2]}' ```
+-d '{"user_id":"vip_user", "recent_items":[1,2], "recent_times":[0.1,0.2]}' 
+```
 响应: 模拟推理延迟 (695.84ms)。 routing_decision: "slow_path"。
+
+**场景 C : 多模态安全熔断 (Visual Override)**
+模拟一个包含视觉异常（如错误日志截图）的请求，触发安全断路器。
+
+```bash
+curl -X POST http://localhost:8000/recommend \
+-H "Content-Type: application/json" \
+-d '{
+    "user_id": "tester", 
+    "recent_items":[1], 
+    "recent_times":[0.1], 
+    "image_input": "screenshot_error_log.png"
+}'
+```
+响应: 尽管请求本身很简单，System 2 仍被强制激活。 routing_decision 显示为 "slow_path"，且日志中包含 visual_override 标记。
 
 ### 3. 流量仿真
 生成混合流量以在 Grafana 中可视化上述仪表盘：
-```bash sh nano_traffic_test.sh ```
+```bash sh nano_traffic_test.sh 
+```
 访问 `http://localhost:3000` (账号/密码: `admin/admin`)。
 
 ## 🧪 复现性与 Mock 模式

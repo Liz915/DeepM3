@@ -34,7 +34,7 @@ class VisionPerceptionTool:
             aggregated_tags.update(res["tags"])
             aggregated_desc.append(res["desc"])
             
-            # [关键] 只要有一张图里有 error 标签，就标记为 True
+            # 只要有一张图里有 error 标签，就标记为 True
             if "error" in res["tags"]:
                 is_error = True
                 
@@ -42,7 +42,6 @@ class VisionPerceptionTool:
             "modality": "image",
             "semantic_tags": list(aggregated_tags),
             "description": "; ".join(aggregated_desc),
-            # [Fix] 必须返回这个字段，core.py 才能读到！
             "contains_error_trace": is_error, 
             "visual_embedding": [0.1] * 128 
         }
