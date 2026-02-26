@@ -1,6 +1,10 @@
 # DeepM3: Continuous-Time Dynamics for Irregular Session-based Recommendation via Neural ODEs
 
-![DeepM3 Architecture Concept](assets/Fig2_Concept.pdf) <!-- Adjust path to your generated cover later -->
+[**English**](./README.md) | [**中文版**](./README.zh-CN.md)
+
+<div align="center">
+  <img src="assets/cover.webp" alt="DeepM3 Architecture Concept" width="800">
+</div>
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=flat&logo=PyTorch&logoColor=white)](https://pytorch.org/)
@@ -66,9 +70,3 @@ DEVICE=auto bash scripts/experiments/run_amazon.sh
 
 1. **Continuous Time Integration (Non-Uniform):** The span between observed events explicitly dictates the ODE integration bounds $([t_{i-1}, t_i] \to dt)$. The hidden intention vector gracefully drifts without zero-padding alignments.
 2. **Lipschitz-Bounded Evolution:** Unlike recurrent blocks prone to gradient explosion under volatile steps, our neural derivatives tightly bound extreme trajectory leaps, making DeepM3 naturally immune to timeline scrambling.
-
----
-
-## 📜 Citation
-
-*(Anonymous for Double-Blind Review. Citation to be provided upon publication.)*

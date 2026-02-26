@@ -1,6 +1,10 @@
 # DeepM3: 基于神经 ODE 的连续时间动态会话推荐模型
 
-![DeepM3 核心架构](assets/Fig2_Concept.pdf) <!-- 请替换为您稍后生成的封面图 -->
+[**English**](./README.md) | [**中文版**](./README.zh-CN.md)
+
+<div align="center">
+  <img src="assets/cover.webp" alt="DeepM3 核心架构" width="800">
+</div>
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=flat&logo=PyTorch&logoColor=white)](https://pytorch.org/)
@@ -62,6 +66,4 @@ DEVICE=auto bash scripts/experiments/run_amazon.sh
 
 ---
 
-## 📜 论文引用 (Citation)
 
-*(当前正处于国际双盲同行评审阶段，相关引用标记、开放 DOI 与预印本链接将于近期随录用结果对外开放获取)*
