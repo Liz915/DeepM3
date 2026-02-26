@@ -4,30 +4,36 @@ class ODESolver(object):
     def __init__(self, func):
         self.func = func
 
-    def rk4_step(self, h, t, dt):
+    def _call_func(self, t, h, dt_ctx):
+        try:
+            return self.func(t, h, dt_ctx)
+        except TypeError:
+            # Backward compatibility for functions defined as f(t, h).
+            return self.func(t, h)
+
+    def rk4_step(self, h, t, dt, dt_ctx=None):
         """
-        Runge-Kutta 4 阶积分法 (精度最高)
-        h: 当前状态 [Batch, Hidden]
-        t: 当前时间 [Batch, 1]
-        dt: 时间步长 [Batch, 1]
+        Runge-Kutta 4 integration step.
+        h:      [B, D] hidden state
+        t:      [B, 1] start time of this step
+        dt:     [B, 1] integration step size
+        dt_ctx: [B, 1] optional delta-time conditioning signal for ODEFunc
         """
-        # k1 = f(t, h)
-        k1 = self.func(t, h)
-        
-        # k2 = f(t + 0.5*dt, h + 0.5*dt*k1)
-        k2 = self.func(t + 0.5 * dt, h + 0.5 * dt * k1)
-        
-        # k3 = f(t + 0.5*dt, h + 0.5*dt*k2)
-        k3 = self.func(t + 0.5 * dt, h + 0.5 * dt * k2)
-        
-        # k4 = f(t + dt, h + dt*k3)
-        k4 = self.func(t + dt, h + dt * k3)
-        
+        if dt_ctx is None:
+            dt_ctx = dt
+
+        k1 = self._call_func(t, h, dt_ctx)
+        k2 = self._call_func(t + 0.5 * dt, h + 0.5 * dt * k1, dt_ctx)
+        k3 = self._call_func(t + 0.5 * dt, h + 0.5 * dt * k2, dt_ctx)
+        k4 = self._call_func(t + dt, h + dt * k3, dt_ctx)
+
         return h + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
 
-    def euler_step(self, h, t, dt):
+    def euler_step(self, h, t, dt, dt_ctx=None):
         """
-        欧拉积分法 
+        Euler integration step.
         """
-        dh = self.func(t, h)
+        if dt_ctx is None:
+            dt_ctx = dt
+        dh = self._call_func(t, h, dt_ctx)
         return h + dh * dt

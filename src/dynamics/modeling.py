@@ -1,80 +1,116 @@
 import torch
 import torch.nn as nn
-# 确保引用路径正确
+
 from src.dynamics.solver import ODESolver
 from src.dynamics.func import ODEFunc
 
+
 class DeepM3Model(nn.Module):
-    # 这里的 __init__ 必须接收 solver 参数，否则 train.py 会报错
+    """
+    Event-wise ODE-RNN (Rubanova et al., 2019).
+    
+    For each event in the sequence:
+        1. ODE evolve: h = ODE(h, t_{i-1} → t_i)  -- continuous dynamics between events
+        2. GRU update: h = GRUCell(h, x_emb_i)     -- discrete update on observation
+    
+    This makes EVERY timestamp matter, not just the last one.
+    """
     def __init__(self, config, n_items=None, solver=None):
         super().__init__()
-        
-        # 1. 维度配置
-        input_dim = config.get('input_dim', 384) 
+
         hidden_dim = config['model']['hidden_dim']
-        
-        # 优先使用传入的 solver (来自命令行)，否则读取配置文件
-        # 这就是消融实验能跑通的关键！
+        self.hidden_dim = hidden_dim
+
+        # Solver mode
         if solver is not None:
             self.solver_mode = solver
         else:
             self.solver_mode = config['model'].get('ode_solver', 'rk4')
-            
-        # 2. Embedding / Encoder 层
+
+        # Item embedding
         if n_items is not None:
             self.use_embedding = True
-            # 强制 Embedding 输出维度等于 hidden_dim
             self.item_emb = nn.Embedding(n_items, hidden_dim, padding_idx=0)
-            self.encoder = nn.Identity()
+            nn.init.xavier_normal_(self.item_emb.weight)
         else:
             self.use_embedding = False
             self.item_emb = None
+            input_dim = config.get('input_dim', 64)
             self.encoder = nn.Linear(input_dim, hidden_dim)
 
-        # 3. 动力学核心
-        self.gru_cell = nn.GRUCell(hidden_dim, hidden_dim)
+        # GRUCell for per-event discrete updates
+        self.gru_cell = nn.GRUCell(
+            input_size=hidden_dim,
+            hidden_size=hidden_dim,
+        )
         
-        # 初始化 ODE 函数和求解器
+        # Also keep fused GRU for 'none' mode (baseline-equivalent, ignores time)
+        self.gru = nn.GRU(
+            input_size=hidden_dim,
+            hidden_size=hidden_dim,
+            batch_first=True,
+        )
+
+        # ODE components
         self.ode_func = ODEFunc(hidden_dim)
         self.solver = ODESolver(self.ode_func)
-        
-        # 4. 输出头
-        output_dim = n_items if n_items is not None else 1
-        self.head = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, x, t, **kwargs):
-        # 1. Projection
+    def forward(self, x, t, dt=None, **kwargs):
+        """
+        x:  [B, L] item IDs
+        t:  [B, L] cumulative time (log-hours)
+        dt: [B, L] inter-event deltas (log-hours), optional
+        Returns: [B, D] user embedding
+        """
+        # 1. Item embeddings
         if self.use_embedding:
-            x_emb = self.item_emb(x)
+            x_emb = self.item_emb(x)  # [B, L, D]
         else:
             x_emb = self.encoder(x)
+
+        B, L, D = x_emb.shape
+
+        # 'none' mode: use fused GRU (no ODE, same as baseline)
+        if self.solver_mode in ('none', 'baseline'):
+            _, h_n = self.gru(x_emb)
+            return h_n.squeeze(0)
+
+        # Event-wise ODE-RNN loop
+        if dt is None:
+            # Derive dt from cumulative time if not provided.
+            dt = torch.zeros_like(t)
+            dt[:, 1:] = t[:, 1:] - t[:, :-1]
+
+        h = torch.zeros(B, D, device=x.device, dtype=x_emb.dtype)
+
+        for i in range(L):
+            # Skip padded positions (item_id == 0)
+            mask = (x[:, i] != 0).float().unsqueeze(-1)  # [B, 1]
             
-        batch_size, seq_len, _ = x_emb.shape
-        h = torch.zeros(batch_size, self.gru_cell.hidden_size).to(x.device)
-        
-        # 2. Loop (ODE-RNN 架构)
-        for i in range(seq_len):
-            # A. 离散更新 (观测点)
-            current_input = x_emb[:, i, :]
-            h = self.gru_cell(current_input, h)
-            
-            # B. 连续演化 (观测点之间)
-            # 只有当不是最后一个点，且 solver_mode 不为 'none' 时才演化
-            if i < seq_len - 1:
-                if self.solver_mode != 'none':
-                    # [Defense] 强制时间单调性，防止 dt <= 0
-                    t_curr = t[:, i]
-                    t_next = torch.maximum(t[:, i+1], t_curr + 1e-5) 
-                    
-                    dt = (t_next - t_curr).view(-1, 1)
-                    
-                    if self.solver_mode == 'rk4':
-                        t_curr_expanded = t_curr.view(-1, 1)
-                        # 调用 solver 的 rk4 方法
-                        h = self.solver.rk4_step(h, t_curr_expanded, dt)
-                    elif self.solver_mode == 'euler':
-                        # 调用 solver 的 euler 方法 (或者手动写也行)
-                        h = self.solver.euler_step(h, t_curr, dt)
-        
-        logits = self.head(h)
-        return logits
+            if i > 0:
+                # ODE evolve h from t_{i-1} to t_i with dt_i.
+                # Use cumulative time for integration limits and dt for conditioning.
+                t_prev = t[:, i - 1].unsqueeze(-1)  # [B, 1]
+                dt_i = dt[:, i].clamp(min=1e-6).unsqueeze(-1)  # [B, 1]
+
+                if self.solver_mode == 'rk4':
+                    h_evolved = self.solver.rk4_step(h, t_prev, dt_i, dt_i)
+                elif self.solver_mode == 'euler':
+                    h_evolved = self.solver.euler_step(h, t_prev, dt_i, dt_i)
+                else:
+                    h_evolved = h
+
+                # Only evolve non-padded positions
+                h = h_evolved * mask + h * (1 - mask)
+
+            # GRU update: incorporate observation x_i
+            h_new = self.gru_cell(x_emb[:, i, :], h)
+            h = h_new * mask + h * (1 - mask)
+
+        return h
+
+    def get_item_embedding(self, item_ids):
+        if self.use_embedding:
+            return self.item_emb(item_ids)
+        else:
+            return torch.zeros(item_ids.shape[0], self.hidden_dim).to(item_ids.device)

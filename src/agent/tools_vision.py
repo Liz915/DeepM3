@@ -2,7 +2,7 @@ import torch
 from typing import Union, List
 from src.agent.registry import register_tool
 
-# 预留真实模型接口
+# 
 try:
     # from transformers import CLIPProcessor, CLIPModel
     pass
@@ -13,28 +13,28 @@ except ImportError:
 class VisionPerceptionTool:
     def __init__(self, context):
         self.config = context.get("config", {})
-        print("👁️ [Vision] Perception Layer Initialized.")
+        print(" [Vision] Perception Layer Initialized.")
 
     def run(self, image_inputs: Union[str, List[str]], **kwargs):
         """
-        支持单图或多图，并计算关键信号 'contains_error_trace'
+         'contains_error_trace'
         """
-        # 兼容处理：把单图转为 list
+        #  list
         if isinstance(image_inputs, str):
             image_inputs = [image_inputs]
             
-        print(f"🖼️ [Vision] Perceiving {len(image_inputs)} images: {image_inputs}")
+        print(f" [Vision] Perceiving {len(image_inputs)} images: {image_inputs}")
         
         aggregated_tags = set()
         aggregated_desc = []
-        is_error = False # 关键信号初始化
+        is_error = False # 
         
         for img_id in image_inputs:
             res = self._analyze_single(img_id)
             aggregated_tags.update(res["tags"])
             aggregated_desc.append(res["desc"])
             
-            # 只要有一张图里有 error 标签，就标记为 True
+            #  error  True
             if "error" in res["tags"]:
                 is_error = True
                 
@@ -47,7 +47,7 @@ class VisionPerceptionTool:
         }
 
     def _analyze_single(self, img_id):
-        # 简单的规则匹配 Mock
+        #  Mock
         if "movie" in img_id:
             return {"tags": ["sci-fi", "movie", "intense"], "desc": "A dark sci-fi movie poster."}
         elif "error" in img_id or "bug" in img_id:

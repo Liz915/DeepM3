@@ -3,20 +3,52 @@ import torch.nn as nn
 
 class ODEFunc(nn.Module):
     """
-    定义潜在状态的导数: dz/dt = f(z, t)
-    模拟用户兴趣在连续时间上的漂移场。
+    Non-autonomous ODE: dz/dt = f(z, t, dt)
+    
+    Takes three signals:
+    - z: hidden state
+    - t: absolute time (cumulative log-hours) — "where in time"
+    - dt: inter-event gap (log-hours) — "how long since last event"
     """
     def __init__(self, hidden_dim):
         super().__init__()
-        # 使用 MLP 拟合向量场
+        
+        # Time conditioning: absolute time + delta
+        self.time_embed = nn.Sequential(
+            nn.Linear(2, hidden_dim),  # [t_abs, dt] → D
+            nn.SiLU(),
+        )
+        
+        # Main dynamics: [z, time_cond] → dz/dt
         self.net = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim * 2),
+            nn.Linear(hidden_dim * 2, hidden_dim * 2),
             nn.Tanh(),
             nn.Linear(hidden_dim * 2, hidden_dim),
-            nn.Tanh() # 限制导数范围，利于数值稳定
+            nn.Tanh(),
         )
 
-    def forward(self, t, z):
-        # 自治系统 (Autonomous System): 导数只与当前状态 z 有关，与绝对时间 t 无关
-        # 但接口保留 t 以兼容非自治系统的扩展
-        return self.net(z)
+    def forward(self, t, z, dt=None):
+        """
+        t:  [B, 1] absolute time
+        z:  [B, D] hidden state
+        dt: [B, 1] inter-event delta (optional, defaults to 0)
+        """
+        # Normalize t to [B, 1]
+        if t.dim() == 0:
+            t = t.unsqueeze(0).expand(z.size(0), 1)
+        elif t.dim() == 1:
+            t = t.unsqueeze(-1)
+        if t.dim() > 2:
+            t = t.view(z.size(0), -1)[:, :1]
+        
+        # Default dt to zeros if not provided
+        if dt is None:
+            dt = torch.zeros_like(t)
+        elif dt.dim() == 1:
+            dt = dt.unsqueeze(-1)
+        
+        # Combine absolute time + delta for richer temporal signal
+        t_input = torch.cat([t, dt], dim=-1)  # [B, 2]
+        t_emb = self.time_embed(t_input)       # [B, D]
+        
+        return self.net(torch.cat([z, t_emb], dim=-1))

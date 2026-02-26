@@ -19,21 +19,21 @@ from src.agent.core import AgentOrchestrator
 # ==========================================
 # Metrics Definition
 # ==========================================
-# 1. Latency: 必须带 strategy 标签，才能在 Grafana 画出两条线
+# 1. Latency:  strategy  Grafana 
 REQUEST_LATENCY = Histogram(
     'api_response_latency_seconds', 
     'End-to-end API latency', 
     ['strategy'] # label: fast_path vs slow_path
 )
 
-# 2. Cache: 使用 status 标签区分 hit/miss
+# 2. Cache:  status  hit/miss
 CACHE_OPS = Counter(
     'cache_operations_total', 
     'Cache Hits and Misses', 
     ['status'] # label: hit vs miss
 )
 
-# 3. Request Count: 记录总请求
+# 3. Request Count: 
 REQUEST_COUNT = Counter(
     'api_requests_total', 
     'Total API Requests', 
@@ -42,12 +42,12 @@ REQUEST_COUNT = Counter(
 
 # Global State
 global_state = { "agent": None, "model": None, "config": None, "llm": None }
-# 简单内存缓存
+# 
 explanation_cache = {}
 LOG_REQ = "logs/online_requests.jsonl"
 
 def load_system():
-    print("🔄 Initializing DeepM3 System...")
+    print(" Initializing DeepM3 System...")
     try:
         global_state["llm"] = DeepSeekReasoner()
         with open("configs/config.yaml", "r") as f: 
@@ -64,16 +64,16 @@ def load_system():
         item2id = {f"M_{i}": i for i in range(1, n_items)}
         agent_context = { "model": model, "item2id": item2id, "config": config }
         global_state["agent"] = AgentOrchestrator(agent_context)
-        print("🚀 System Ready.")
+        print(" System Ready.")
     except Exception as e:
-        print(f"❌ Initialization Error: {e}")
+        print(f" Initialization Error: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     os.makedirs("logs", exist_ok=True)
     load_system()
     yield
-    print("🛑 System Shutdown")
+    print(" System Shutdown")
 
 app = FastAPI(lifespan=lifespan, title="DeepM3-Dyn API")
 app.mount("/metrics", make_asgi_app())
@@ -108,7 +108,7 @@ async def recommend(
     if not agent: raise HTTPException(503, "System Initializing")
 
     # ==========================================
-    # L1 Visual Cache Layer (感知层)
+    # L1 Visual Cache Layer ()
     # ==========================================
     visual_context = None
     if req.image_input:
@@ -117,7 +117,7 @@ async def recommend(
     # ==========================================
     # Cache Logic (Simplified for Demo)
     # ==========================================
-    # 为了演示效果，Cache Key 只看 User ID。
+    # Cache Key  User ID
     cache_key = req.user_id 
     
     cached_result = None
@@ -132,19 +132,19 @@ async def recommend(
     # ==========================================
     force_strategy = None
     
-    # 2. Header 强制控制 (Demo Mode)
+    # 2. Header  (Demo Mode)
     if x_demo_mode == "force_fast": force_strategy = "fast_path"
     if x_demo_mode == "force_slow": force_strategy = "slow_path"
     if visual_context and visual_context.get("contains_error_trace", False):
-        print("🛡️ [Safety Guard] Visual anomaly detected! Override -> Slow Path.")
+        print(" [Safety Guard] Visual anomaly detected! Override -> Slow Path.")
         force_strategy = "slow_path"
 
-    if cached_result and not force_strategy == "slow_path": # 缓存命中且未被熔断
+    if cached_result and not force_strategy == "slow_path": # 
     
         # Cache Hit -> Fast Return (L1)
         final_res = cached_result
         reasoning_source = "cache_hit (L1)"
-        decision = "fast_path" # 缓存命中也算快路
+        decision = "fast_path" # 
     else:
         # Cache Miss -> Run Agent
         ctx = {
@@ -158,14 +158,14 @@ async def recommend(
         
         agent_res = agent.run(req.user_id, ctx)
         
-        # 结果提取
+        # 
         if agent_res is None: agent_res = {}
         reasoning_source = agent_res.get("meta", {}).get("routing_decision", "slow_path")
         
-        # 为了让 Grafana 区分两条线，我们显式区分 decision 字符串
+        #  Grafana  decision 
         decision = "slow_path" if "slow" in reasoning_source else "fast_path"
         
-        # 写入缓存 (模拟)
+        #  ()
         final_res = agent_res
         explanation_cache[cache_key] = final_res
 
@@ -174,7 +174,7 @@ async def recommend(
     # ==========================================
     latency_seconds = time.time() - start_time
     
-    # 记录 Latency 时带上 strategy 标签
+    #  Latency  strategy 
     REQUEST_LATENCY.labels(strategy=decision).observe(latency_seconds)
     REQUEST_COUNT.labels(strategy=decision).inc()
 

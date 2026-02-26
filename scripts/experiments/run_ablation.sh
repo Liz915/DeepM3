@@ -1,61 +1,69 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-# 控制变量：固定随机种子，确保只比较模型架构差异
-SEED=42
+SEED=${SEED:-42}
+NUM_NEG=${NUM_NEG:-100}
+CONFIG=${CONFIG:-configs/config.yaml}
+OUT_DIR=${OUT_DIR:-results/ml1m}
 
-echo "🧪 Starting Ablation Study (Seed=$SEED)..."
-echo "Model,Solver,HR@10,NDCG@10,Latency(ms)" > results/ablation_report.csv
+echo " Starting Ablation Study (seed=${SEED}, num_neg=${NUM_NEG})..."
+mkdir -p "${OUT_DIR}"
+REPORT_FILE="${OUT_DIR}/ablation_report.csv"
+echo "Model,Solver,HR@10,NDCG@10,Latency(ms)" > "${REPORT_FILE}"
 
-# --- 实验 1: Baseline GRU (纯离散模型) ---
+eval_and_append () {
+    local model_name="$1"
+    local solver="$2"
+    local ckpt="$3"
+    local result_line
+    result_line=$(python scripts/eval/evaluate.py \
+        --config "${CONFIG}" \
+        --model_path "${ckpt}" \
+        --solver "${solver}" \
+        --seed "${SEED}" \
+        --num_neg "${NUM_NEG}" | tail -n 1)
+    local values
+    values=$(echo "${result_line}" | awk -F',' '{print $2 "," $3 "," $4}')
+    echo "${model_name},${solver},${values}" >> "${REPORT_FILE}"
+    echo " ${model_name} (${solver}) done: ${values}"
+}
+
 echo "--------------------------------"
-echo "🔄 [1/3] Running Baseline: GRU (No ODE)..."
-# solver=none 意味着只运行 GRU，跳过 ODE 演化
+echo " [1/4] Baseline GRU..."
 python scripts/train/train.py \
-    --seed $SEED \
+    --seed "${SEED}" \
+    --solver baseline \
+    --save_name "model_gru_baseline.pth" \
+    --config "${CONFIG}"
+eval_and_append "Baseline" "baseline" "checkpoints/model_gru_baseline.pth"
+
+echo "--------------------------------"
+echo " [2/4] DeepM3 (None Solver)..."
+python scripts/train/train.py \
+    --seed "${SEED}" \
     --solver none \
-    --save_name "model_baseline_gru.pth" \
-    --config configs/config.yaml
+    --save_name "model_ode_none.pth" \
+    --config "${CONFIG}"
+eval_and_append "DeepM3" "none" "checkpoints/model_ode_none.pth"
 
-# 评估
-RESULT=$(python scripts/eval/evaluate.py --model_path "checkpoints/model_baseline_gru.pth")
-VALUES=$(echo $RESULT | awk -F',' '{print $2 "," $3 "," $4}')
-echo "Baseline(GRU),None,$VALUES" >> results/ablation_report.csv
-echo "✅ GRU Done: $VALUES"
-
-
-# --- 实验 2: Neural ODE (Euler Solver) ---
 echo "--------------------------------"
-echo "🔄 [2/3] Running ODE with Euler Solver (Fast but less accurate)..."
+echo " [3/4] DeepM3 (Euler Solver)..."
 python scripts/train/train.py \
-    --seed $SEED \
+    --seed "${SEED}" \
     --solver euler \
     --save_name "model_ode_euler.pth" \
-    --config configs/config.yaml
+    --config "${CONFIG}"
+eval_and_append "DeepM3" "euler" "checkpoints/model_ode_euler.pth"
 
-# 评估
-RESULT=$(python scripts/eval/evaluate.py --model_path "checkpoints/model_ode_euler.pth")
-VALUES=$(echo $RESULT | awk -F',' '{print $2 "," $3 "," $4}')
-echo "DeepM3,Euler,$VALUES" >> results/ablation_report.csv
-echo "✅ Euler Done: $VALUES"
-
-
-# --- 实验 3: Neural ODE (RK4 Solver) ---
 echo "--------------------------------"
-echo "🔄 [3/3] Running ODE with RK4 Solver (Ours)..."
+echo " [4/4] DeepM3 (RK4 Solver)..."
 python scripts/train/train.py \
-    --seed $SEED \
+    --seed "${SEED}" \
     --solver rk4 \
     --save_name "model_ode_rk4.pth" \
-    --config configs/config.yaml
-
-# 评估
-RESULT=$(python scripts/eval/evaluate.py --model_path "checkpoints/model_ode_rk4.pth")
-VALUES=$(echo $RESULT | awk -F',' '{print $2 "," $3 "," $4}')
-echo "DeepM3,RK4,$VALUES" >> results/ablation_report.csv
-echo "✅ RK4 Done: $VALUES"
+    --config "${CONFIG}"
+eval_and_append "DeepM3" "rk4" "checkpoints/model_ode_rk4.pth"
 
 echo "--------------------------------"
-echo "🏆 Ablation Study Finished!"
-echo "👇 Final Comparison:"
-cat results/ablation_report.csv
+echo " Ablation Study Finished."
+cat "${REPORT_FILE}"

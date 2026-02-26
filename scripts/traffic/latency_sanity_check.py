@@ -14,25 +14,25 @@ def measure(user_id, items, label):
     print(f"[{label}] {lat:.2f}ms | {src}")
     return lat
 
-print("🚀 Starting P7 Benchmark...")
+print(" Starting P7 Benchmark...")
 
-# 1. 制造 L3 (Slow Path) 或 L2
-# 第一次访问，大概率是 L2 (Fast) 或者 L3 (如果 Entropy 高)
+# 1.  L3 (Slow Path)  L2
+#  L2 (Fast)  L3 ( Entropy )
 measure("user_new_1", [10, 20], "COLD_1")
 
-# 2. 制造 L1 (Cache Hit)
-print("🔥 Warming up cache for Hot User...")
-# 发送第一次请求
+# 2.  L1 (Cache Hit)
+print(" Warming up cache for Hot User...")
+# 
 measure("user_hot", [1, 2, 3], "WARMUP_REQ")
 
-# 睡 1.5 秒，等待后台 DeepSeek 写入 Cache
-print("⏳ Waiting for background reasoning...")
+#  1.5  DeepSeek  Cache
+print(" Waiting for background reasoning...")
 time.sleep(1.5) 
 
-print("🚀 Testing L1 Latency...")
+print(" Testing L1 Latency...")
 hits = []
 for i in range(10):
 
     hits.append(measure("user_hot", [1, 2, 3], "L1_HIT"))
 
-print(f"\n🏆 Average L1 Latency: {np.mean(hits):.2f} ms")
+print(f"\n Average L1 Latency: {np.mean(hits):.2f} ms")

@@ -11,9 +11,9 @@ class VisualSemanticCache:
         self.hits = 0
         self.misses = 0
         
-        # 初始化“视觉编码器”
+        # 
         self.encoder = VisionPerceptionTool(context={}) 
-        print("👁️ [Perception] L1 Visual Cache Layer Initialized.")
+        print(" [Perception] L1 Visual Cache Layer Initialized.")
 
     def _generate_key(self, image_input: str):
         return hashlib.md5(str(image_input).encode('utf-8')).hexdigest()
@@ -49,5 +49,5 @@ class VisualSemanticCache:
             "visual_cache_hit_rate": self.hits / total if total > 0 else 0.0
         }
 
-# 全局单例
+# 
 visual_cache = VisualSemanticCache()

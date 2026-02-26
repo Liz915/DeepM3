@@ -21,8 +21,11 @@ venv/
 # ==========================
 # 3. Data & Large Files
 # ==========================
-data/raw/
-data/processed.pt
+data/
+*.pkl
+*.json.gz
+*.gz
+*.pt
 *.zip
 *.csv
 # 保留 nano_traffic_test.sh 等小脚本
@@ -45,6 +48,8 @@ checkpoints/
 logs/
 runs/
 results/
+grafana_storage/
+prometheus_data/
 # 忽略 Grafana 的本地存储（里面有很多临时文件）
 grafana_storage/
 # 如果未来加了 Prometheus 持久化，也忽略

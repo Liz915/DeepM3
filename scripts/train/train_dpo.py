@@ -7,24 +7,24 @@ from trl import DPOTrainer, DPOConfig
 from peft import LoraConfig
 
 # ==========================================
-# 🎯 配置区域 (Mac M1/M2/M3 最终稳定版)
+#   (Mac M1/M2/M3 )
 # ==========================================
 MODEL_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 OUTPUT_DIR = "checkpoints/dpo_qwen25_final"
 DATA_FILE = "assets/dpo_dataset_final.jsonl"
 
-# 训练配置
+# 
 NUM_EPOCHS = 3
-BATCH_SIZE = 1           # M1 显存吃紧，Batch Size 只能设 1
-GRAD_ACCUM = 8           # 梯度累积，等效 Batch Size = 8
-LEARNING_RATE = 1e-5     # DPO 标准学习率
+BATCH_SIZE = 1           # M1 Batch Size  1
+GRAD_ACCUM = 8           #  Batch Size = 8
+LEARNING_RATE = 1e-5     # DPO 
 
 def main():
-    # 1. 设备检测
+    # 1. 
     device = "mps" if torch.backends.mps.is_available() else "cpu"
-    print(f"🚀 Running DPO on {device.upper()} ...")
+    print(f" Running DPO on {device.upper()} ...")
 
-    # 2. 加载数据
+    # 2. 
     if not os.path.exists(DATA_FILE):
          raise FileNotFoundError(f"Data file {DATA_FILE} not found!")
     
@@ -38,23 +38,23 @@ def main():
             except: pass
 
     dataset = Dataset.from_list(data_list)
-    print(f"📚 Loaded {len(dataset)} valid samples.")
+    print(f" Loaded {len(dataset)} valid samples.")
 
     # 3. Tokenizer
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
     tokenizer.pad_token = tokenizer.eos_token
 
-    # 4. 加载模型
-    # 使用 torch.float32 保证 MPS 绝对稳定 (0.5B 模型 FP32 也就 2GB 显存，M1 扛得住)
-    print("🤖 Loading Model (FP32)...")
+    # 4. 
+    #  torch.float32  MPS  (0.5B  FP32  2GB M1 )
+    print(" Loading Model (FP32)...")
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_ID,
         torch_dtype=torch.float32, 
         device_map=None 
     ).to(device)
 
-    # 5. LoRA 配置 (全量 Linear 层)
-    # 补全 Qwen 的 MLP 层，效果更好
+    # 5. LoRA  ( Linear )
+    #  Qwen  MLP 
     peft_config = LoraConfig(
         r=16,
         lora_alpha=32,
@@ -65,10 +65,10 @@ def main():
             "q_proj", "k_proj", "v_proj", "o_proj", 
             "gate_proj", "up_proj", "down_proj"
         ],
-        use_dora=False # 关闭 DoRA，提升 MPS 训练速度
+        use_dora=False #  DoRA MPS 
     )
 
-    # 6. 训练参数
+    # 6. 
     training_args = DPOConfig(
         output_dir=OUTPUT_DIR,
         per_device_train_batch_size=BATCH_SIZE,
@@ -76,7 +76,7 @@ def main():
         learning_rate=LEARNING_RATE,
         num_train_epochs=NUM_EPOCHS,
         
-        # 关闭混合精度，防止 MPS 报错 (速度慢点但能跑完)
+        #  MPS  ()
         fp16=False,
         bf16=False,
         
@@ -88,23 +88,23 @@ def main():
         max_length=1024,
     )
 
-    # 7. 初始化 Trainer
-    print("🔥 Initializing DPO Trainer...")
+    # 7.  Trainer
+    print(" Initializing DPO Trainer...")
     trainer = DPOTrainer(
         model=model,
-        ref_model=None, # 显式设为 None，让 TRL 内部处理 Reference
+        ref_model=None, #  None TRL  Reference
         args=training_args,
         train_dataset=dataset,
-        processing_class=tokenizer, # 参数名已修正
+        processing_class=tokenizer, # 
         peft_config=peft_config,
     )
 
-    # 8. 开始训练
-    print("🏎️ Start Training! (This may take a while on M1...)")
+    # 8. 
+    print(" Start Training! (This may take a while on M1...)")
     trainer.train()
 
-    # 9. 保存
-    print("💾 Saving LoRA adapter...")
+    # 9. 
+    print(" Saving LoRA adapter...")
     trainer.save_model(OUTPUT_DIR)
 
 if __name__ == "__main__":

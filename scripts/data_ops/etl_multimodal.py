@@ -38,4 +38,4 @@ with open(OUTPUT, "w") as f:
     for _ in range(100):
         f.write(json.dumps(make_sample()) + "\n")
 
-print(f"✅ Multimodal DPO dataset written to {OUTPUT}")
+print(f" Multimodal DPO dataset written to {OUTPUT}")

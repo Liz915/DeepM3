@@ -4,23 +4,22 @@ data:
   data_path: "data/processed.pt"
 
 model:
-  hidden_dim: 128       # 核心维度，Embedding 和 GRU/ODE 都用这个
-  ode_solver: "rk4"     # 核心求解器
+  hidden_dim: 128      # Shared hidden size for embeddings and sequence encoders
+  ode_solver: "rk4"    # Default ODE solver
   dropout: 0.1
 
 train:
-  batch_size: 64        # 批次大小
-  learning_rate: 0.001  # [Fix] 之前缺失的参数
+  batch_size: 64        # Training batch size
+  learning_rate: 0.001  # Default learning rate
   weight_decay: 1e-5
   epochs: 10
   log_interval: 10
 
 agent:
-  # 视觉语义到 Item ID 的映射表 (Multimodal Injection)
-  # [Theory] Mapping visual semantics to latent space attractors
+  # Mapping from visual semantics to item IDs (multimodal injection).
   visual_mapping:
     "sci-fi": 1001
     "sports": 2002
     "python": 3003
     "romance": 1004
-    "error": 9999  # 特殊处理
+    "error": 9999  # Reserved fallback token

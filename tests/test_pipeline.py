@@ -5,7 +5,7 @@ from src.dynamics.func import ODEFunc
 
 def test_rk4_gradients():
     """
-    验证手写的 RK4 求解器是否支持梯度反向传播
+     RK4 
     """
     dim = 16
     func = ODEFunc(dim)
@@ -24,10 +24,10 @@ def test_rk4_gradients():
 
 def test_ode_integration():
     """
-    验证积分数值稳定性
+    
     """
     # y' = y, y(0)=1 => y(t) = e^t
-    # 模拟一个简单的线性系统
+    # 
     class SimpleFunc(torch.nn.Module):
         def forward(self, t, y):
             return y
@@ -38,5 +38,5 @@ def test_ode_integration():
     
     z1 = solver.rk4_step(z0, 0, dt)
     # e^1 = 2.71828
-    # RK4 应该非常接近
+    # RK4 
     assert abs(z1.item() - 2.718) < 0.01, f"RK4 numerical error too large: {z1.item()}"
