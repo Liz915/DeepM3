@@ -6,7 +6,9 @@ cd "${ROOT_DIR}"
 
 STAMP="$(date +%Y%m%d_%H%M%S)"
 ARCHIVE_DIR="results/archive/${STAMP}"
-CANONICAL_DIR="results/ml1m"
+DATASET="${DATASET:-ml1m}"
+OUTPUT_DIR="${OUTPUT_DIR:-results/${DATASET}}"
+CANONICAL_DIR="${OUTPUT_DIR}"
 
 mkdir -p "${ARCHIVE_DIR}" "${CANONICAL_DIR}"
 

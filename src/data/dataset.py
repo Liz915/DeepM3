@@ -37,6 +37,12 @@ def _infer_n_items(samples, data_dir):
 class MovieLensDataset(Dataset):
     def __init__(self, mode='train', data_dir='data'):
         file_path = f"{data_dir}/ml1m_{mode}.pkl"
+        if mode == 'val' and not os.path.exists(file_path):
+            raise FileNotFoundError(
+                f"Validation split not found: {file_path}. "
+                f"Create ml1m_val.pkl or use a train-subset fallback in the trainer."
+            )
+            
         print(f" Loading {mode} data from {file_path}...")
         
         with open(file_path, 'rb') as f:

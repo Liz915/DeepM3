@@ -20,6 +20,69 @@ from src.dynamics.modeling import DeepM3Model
 from src.dynamics.gru_baseline import GRUBaseline
 from src.dynamics.baselines import SASRec, TiSASRec
 from src.utils.seeder import set_seed
+import numpy as np
+
+def compute_ndcg_per_user(scores, k=10):
+    _, top_indices = torch.topk(scores, k=k, dim=-1)
+    pos_in_topk = (top_indices == 0).float()
+    ranks = torch.arange(1, k + 1, device=scores.device).float()
+    weights = 1.0 / torch.log2(ranks + 1)
+    ndcg = (pos_in_topk * weights).sum(dim=-1).item()
+    return ndcg
+
+def evaluate_val(model, dataset, device, solver="euler", args=None, val_indices=None):
+    model.eval()
+    ndcg_list = []
+    # Build a simple fixed negative pool for val to be fast and reproducible.
+    rng = np.random.default_rng(42)
+    num_neg = args.val_num_neg if args is not None else 100
+    n_items = getattr(dataset, "n_items", None)
+    if n_items is None and hasattr(dataset, "dataset"):
+        n_items = getattr(dataset.dataset, "n_items", None)
+    if n_items is None:
+        raise ValueError("Cannot infer n_items for validation dataset.")
+
+    index_iter = val_indices if val_indices is not None else range(len(dataset))
+    with torch.no_grad():
+        for idx in index_iter:
+            sample = dataset[idx]
+            x = sample["x"].unsqueeze(0).to(device)
+            t = sample["t"].unsqueeze(0).to(device)
+            dt = sample["dt"].unsqueeze(0).to(device) if "dt" in sample else None
+            pos = int(sample["pos"].item())
+
+            blocked = {pos}
+            blocked.update(int(v) for v in sample["x"].tolist() if int(v) > 0)
+            negs = []
+            while len(negs) < num_neg:
+                c = int(rng.integers(1, n_items))
+                if c not in blocked:
+                    negs.append(c)
+            cands = np.asarray([pos] + negs, dtype=np.int64)
+            cand_t = torch.tensor(cands, dtype=torch.long, device=device)
+            
+            if args.model == "deepm3":
+                t_in, dt_in = t, dt
+                if hasattr(args, "time_ablation") and args.time_ablation != "full":
+                    seq_len = t.size(1)
+                    t_seq = torch.arange(1, seq_len+1, dtype=torch.float32, device=t.device).unsqueeze(0).expand_as(t)
+                    dt_ones = torch.ones_like(t)
+                    if args.time_ablation == "none":
+                        t_in, dt_in = t_seq, dt_ones
+                    elif args.time_ablation == "t_only":
+                        dt_in = dt_ones
+                    elif args.time_ablation == "dt_only":
+                        t_in = t_seq
+                u = model(x, t_in, dt=dt_in)
+            elif model_needs_time(args.model):
+                u = model(x, t)
+            else:
+                u = model(x)
+                
+            i_emb = model.get_item_embedding(cand_t)
+            s = torch.matmul(u, i_emb.t())
+            ndcg_list.append(compute_ndcg_per_user(s, k=10))
+    return np.mean(ndcg_list)
 
 
 def bpr_loss(user_emb, pos_item_emb, neg_item_emb):
@@ -104,11 +167,13 @@ def train(args):
         config["model"]["hidden_dim"] = args.hidden_dim
     hidden_dim = config["model"]["hidden_dim"]
 
+    data_dir = args.data_dir or ("data/amazon" if args.dataset == "amazon" else "data")
+
     # Dataset
     if args.dataset == "ml1m":
-        train_dataset = MovieLensDataset(mode="train", data_dir=args.data_dir or "data")
+        train_dataset = MovieLensDataset(mode="train", data_dir=data_dir)
     elif args.dataset == "amazon":
-        train_dataset = MovieLensDataset(mode="train", data_dir=args.data_dir or "data/amazon")
+        train_dataset = MovieLensDataset(mode="train", data_dir=data_dir)
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
 
@@ -137,7 +202,31 @@ def train(args):
         lr = default_lr
     print(f"Learning rate: {lr}")
 
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=args.weight_decay)
+
+    # Validation split for early stopping:
+    # prefer explicit ml1m_val.pkl; otherwise use a deterministic subset of train.
+    val_indices = None
+    val_path = os.path.join(data_dir, "ml1m_val.pkl")
+    if os.path.exists(val_path):
+        val_dataset = MovieLensDataset(mode="val", data_dir=data_dir)
+        print(f"Val Samples: {len(val_dataset)} (explicit split)")
+    else:
+        val_dataset = train_dataset
+        rng = np.random.default_rng(args.seed + 17)
+        all_indices = np.arange(len(train_dataset))
+        rng.shuffle(all_indices)
+        val_count = int(len(train_dataset) * args.val_ratio)
+        val_count = max(1, min(len(train_dataset), args.val_max_samples, max(256, val_count)))
+        val_indices = all_indices[:val_count].tolist()
+        print(
+            f"Validation file missing. Using train subset for early stopping: "
+            f"{val_count}/{len(train_dataset)} samples."
+        )
+
+    best_ndcg = -1.0
+    patience_counter = 0
+    patience_limit = 3
 
     for epoch in range(args.epochs):
         model.train()
@@ -163,6 +252,18 @@ def train(args):
                         jitter_std=args.time_jitter_std,
                         drop_prob=args.time_drop_prob,
                     )
+                # Ablation overrides overrides jitter/drop
+                if hasattr(args, "time_ablation") and args.time_ablation != "full":
+                    seq_len = t.size(1)
+                    t_seq = torch.arange(1, seq_len+1, dtype=torch.float32, device=t.device).unsqueeze(0).expand_as(t)
+                    dt_ones = torch.ones_like(t)
+                    if args.time_ablation == "none":
+                        t_in, dt_in = t_seq, dt_ones
+                    elif args.time_ablation == "t_only":
+                        dt_in = dt_ones
+                    elif args.time_ablation == "dt_only":
+                        t_in = t_seq
+                
                 user_emb = model(x, t_in, dt=dt_in)
             elif model_needs_time(args.model):
                 user_emb = model(x, t)
@@ -182,13 +283,34 @@ def train(args):
                 print(f"\rStep {i}/{len(train_loader)} Loss: {loss.item():.4f}", end="")
 
         elapsed = time.time() - start
-        print(f"\nEpoch {epoch+1} | Loss: {total_loss/len(train_loader):.4f} | Time: {elapsed:.1f}s")
+        
+        # Validation Eval
+        val_ndcg = evaluate_val(
+            model=model,
+            dataset=val_dataset,
+            device=device,
+            solver=args.solver,
+            args=args,
+            val_indices=val_indices,
+        )
+        print(f"\nEpoch {epoch+1} | Loss: {total_loss/len(train_loader):.4f} | Val NDCG@10: {val_ndcg:.4f} | Time: {elapsed:.1f}s")
 
         save_path = os.path.join("checkpoints", args.save_name)
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        torch.save(model.state_dict(), save_path)
+        
+        if val_ndcg > best_ndcg:
+            best_ndcg = val_ndcg
+            patience_counter = 0
+            torch.save(model.state_dict(), save_path)
+            print(f"  [+] Best model saved to {save_path}")
+        else:
+            patience_counter += 1
+            print(f"  [-] No improvement. Patience: {patience_counter}/{patience_limit}")
+            if patience_counter >= patience_limit:
+                print("Early stopping triggered.")
+                break
 
-    print(f"Model saved to {save_path}")
+    print(f"Training Complete. Best Val NDCG: {best_ndcg:.4f}")
 
 
 if __name__ == "__main__":
@@ -210,5 +332,10 @@ if __name__ == "__main__":
                         choices=["auto", "cpu", "cuda", "mps"])
     parser.add_argument("--time_jitter_std", type=float, default=0.0)
     parser.add_argument("--time_drop_prob", type=float, default=0.0)
+    parser.add_argument("--val_ratio", type=float, default=0.05)
+    parser.add_argument("--val_max_samples", type=int, default=2000)
+    parser.add_argument("--val_num_neg", type=int, default=100)
+    parser.add_argument("--weight_decay", type=float, default=1e-5)
+    parser.add_argument("--time_ablation", type=str, default="full", choices=["full", "none", "t_only", "dt_only"])
     args = parser.parse_args()
     train(args)

@@ -5,6 +5,7 @@ DATASET=${DATASET:-ml1m}
 SEED=${SEED:-42}
 HIDDEN_DIM=${HIDDEN_DIM:-256}
 LRS=${LRS:-"1e-4,3e-4,5e-4"}
+WDS=${WDS:-"1e-5"}
 EPOCHS_LIST=${EPOCHS_LIST:-"50,100,150"}
 MODELS=${MODELS:-"sasrec,tisasrec"}
 NUM_NEG=${NUM_NEG:-100}
@@ -21,6 +22,7 @@ cmd=(
   --hidden_dim "${HIDDEN_DIM}"
   --models "${MODELS}"
   --lrs "${LRS}"
+  --wds "${WDS}"
   --epochs_list "${EPOCHS_LIST}"
   --num_neg "${NUM_NEG}"
   --topk "${TOPK}"

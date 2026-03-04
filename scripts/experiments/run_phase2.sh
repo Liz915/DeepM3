@@ -187,6 +187,7 @@ if [[ "${SKIP_MULTISEED}" == "0" ]]; then
     DEVICE="${DEVICE}" HIDDEN_DIM="${HIDDEN_DIM}" \
     DATASET="${DATASET}" CONFIG="${CONFIG}" \
     NUM_NEG="${NUM_NEG}" TOPK="${TOPK}" \
+    DATA_DIR="${DATA_DIR}" \
     OUT_DIR="${OUTPUT_DIR}/multiseed" \
     bash scripts/experiments/run_multiseed.sh
     echo " Stage 7 done."
@@ -199,6 +200,7 @@ fi
 if [[ "${SKIP_CLEANUP}" == "0" ]]; then
     echo ""
     echo "=== [Stage 8/8] Cleanup & Archive ==="
+    DATASET="${DATASET}" OUTPUT_DIR="${OUTPUT_DIR}" \
     bash scripts/experiments/cleanup_results.sh
     echo " Stage 8 done."
 else

@@ -93,6 +93,20 @@ def paired_t_test(x, y):
     p_val = math.erfc(abs(t_stat) / math.sqrt(2.0))
     return float(t_stat), float(p_val)
 
+def wilcoxon_test(x, y):
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    diff = x - y
+    diff = diff[diff != 0]
+    if len(diff) == 0:
+        return float('nan'), float('nan')
+    if stats is not None:
+        try:
+            stat, p_val = stats.wilcoxon(diff)
+            return float(stat), float(p_val)
+        except ValueError:
+            return float('nan'), float('nan')
+    return float('nan'), float('nan')
 
 def analyze_metrics():
     parser = argparse.ArgumentParser(description="Irregularity analysis")
@@ -224,6 +238,7 @@ def analyze_metrics():
         g = df[df["bucket_cv"] == group_name]
         if len(g) > 1:
             t_g, p_g = paired_t_test(g["ndcg_ode"], g["ndcg_base"])
+            w_g, pw_g = wilcoxon_test(g["ndcg_ode"], g["ndcg_base"])
             group_sig.append({
                 "group": group_name,
                 "n": len(g),
@@ -231,7 +246,8 @@ def analyze_metrics():
                 "ndcg_ode_mean": g["ndcg_ode"].mean(),
                 "lift_pct": (g["ndcg_ode"].mean() - g["ndcg_base"].mean()) / (g["ndcg_base"].mean() + 1e-12) * 100,
                 "t_stat": t_g,
-                "p_value": p_g,
+                "t_pval": p_g,
+                "wilcoxon_pval": pw_g,
             })
     group_sig_df = pd.DataFrame(group_sig)
 

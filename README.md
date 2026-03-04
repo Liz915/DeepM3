@@ -3,7 +3,7 @@
 [**English**](./README.md) | [**中文版**](./README.zh-CN.md)
 
 <div align="center">
-  <img src="assets/cover.webp" alt="DeepM3 Architecture Concept" width="800">
+  <img src="assets/cover.png" alt="DeepM3 Architecture Concept" width="800">
 </div>
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)

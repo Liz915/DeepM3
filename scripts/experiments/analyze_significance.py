@@ -93,6 +93,21 @@ def paired_t_test(x, y):
     p_val = math.erfc(abs(t_stat) / math.sqrt(2.0))
     return float(t_stat), float(p_val)
 
+def wilcoxon_test(x, y):
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    diff = x - y
+    # Remove differences of exactly zero as they bias Wilcoxon
+    diff = diff[diff != 0]
+    if len(diff) == 0:
+        return float('nan'), float('nan')
+    if stats is not None:
+        try:
+            stat, p_val = stats.wilcoxon(diff)
+            return float(stat), float(p_val)
+        except ValueError:
+            return float('nan'), float('nan')
+    return float('nan'), float('nan')
 
 def run_analysis():
     parser = argparse.ArgumentParser(description="Statistical significance analysis")
@@ -189,15 +204,20 @@ def run_analysis():
     print("\n" + "=" * 50)
     print(" 1. Statistical Significance Test (Paired t-test)")
     print("=" * 50)
-    t_stat, p_val = paired_t_test(df["ndcg_ode"], df["ndcg_base"])
+    t_stat, p_val_t = paired_t_test(df["ndcg_ode"], df["ndcg_base"])
+    w_stat, p_val_w = wilcoxon_test(df["ndcg_ode"], df["ndcg_base"])
     print(f"Mean NDCG (Base) : {df['ndcg_base'].mean():.4f}")
     print(f"Mean NDCG (Euler): {df['ndcg_ode'].mean():.4f}")
-    print(f"T-statistic: {t_stat:.4f}")
-    print(f"P-value: {p_val:.4e}")
+    print(f"Paired t-test: t={t_stat:.4f}, p={p_val_t:.4e}")
+    if not math.isnan(w_stat):
+        print(f"Wilcoxon test: w={w_stat:.4f}, p={p_val_w:.4e}")
+        p_val_final = p_val_w
+    else:
+        p_val_final = p_val_t
 
-    if p_val < 0.05:
+    if p_val_final < 0.05:
         print(" RESULT: Statistically Significant (p < 0.05)!")
-    elif p_val < 0.1:
+    elif p_val_final < 0.1:
         print(" RESULT: Marginally Significant (0.05 < p < 0.1)")
     else:
         print(" RESULT: Not significant.")
@@ -220,8 +240,15 @@ def run_analysis():
     for group_name in ["Short (<=10)", "Medium (11-15)", "Long (>15)"]:
         g = df[df["len_group"] == group_name]
         if len(g) > 1:
-            t_g, p_g = paired_t_test(g["ndcg_ode"], g["ndcg_base"])
-            group_sig.append({"group": group_name, "t_stat": t_g, "p_value": p_g, "n": len(g)})
+            t_g, pt_g = paired_t_test(g["ndcg_ode"], g["ndcg_base"])
+            w_g, pw_g = wilcoxon_test(g["ndcg_ode"], g["ndcg_base"])
+            group_sig.append({
+                "group": group_name, 
+                "t_stat": t_g, 
+                "t_pval": pt_g,
+                "wilcoxon_pval": pw_g,
+                "n": len(g)
+            })
     group_sig_df = pd.DataFrame(group_sig)
 
     print(summary)
@@ -234,7 +261,9 @@ def run_analysis():
         "mean_ndcg_baseline": df["ndcg_base"].mean(),
         "mean_ndcg_euler": df["ndcg_ode"].mean(),
         "t_statistic": t_stat,
-        "p_value": p_val,
+        "t_pval": p_val_t,
+        "wilcoxon_stat": w_stat,
+        "wilcoxon_pval": p_val_w,
         "n_users": len(df),
     }]).to_csv(sig_path, index=False)
 

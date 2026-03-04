@@ -93,7 +93,8 @@ def evaluate(args):
         cfg = yaml.safe_load(f)
 
     device = pick_device(args.device)
-    dataset = MovieLensDataset(mode="test")
+    data_dir = args.data_dir or ("data/amazon" if args.dataset == "amazon" else "data")
+    dataset = MovieLensDataset(mode="test", data_dir=data_dir)
     loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
     rng = np.random.default_rng(args.seed)
 
@@ -126,7 +127,18 @@ def evaluate(args):
             if args.solver == "baseline":
                 user_emb = model(x)
             else:
-                user_emb = model(x, t, dt=dt)
+                t_in, dt_in = t, dt
+                if hasattr(args, "time_ablation") and args.time_ablation != "full":
+                    seq_len = t.size(1)
+                    t_seq = torch.arange(1, seq_len+1, dtype=torch.float32, device=t.device).unsqueeze(0).expand_as(t)
+                    dt_ones = torch.ones_like(t)
+                    if args.time_ablation == "none":
+                        t_in, dt_in = t_seq, dt_ones
+                    elif args.time_ablation == "t_only":
+                        dt_in = dt_ones
+                    elif args.time_ablation == "dt_only":
+                        t_in = t_seq
+                user_emb = model(x, t_in, dt=dt_in)
             if device.type == "cuda":
                 torch.cuda.synchronize()
             elif device.type == "mps":
@@ -161,6 +173,9 @@ if __name__ == "__main__":
     parser.add_argument("--num_neg", type=int, default=100)
     parser.add_argument("--topk", type=int, default=10)
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda", "mps"])
+    parser.add_argument("--dataset", type=str, default="ml1m", choices=["ml1m", "amazon"])
+    parser.add_argument("--data_dir", type=str, default="")
+    parser.add_argument("--time_ablation", type=str, default="full", choices=["full", "none", "t_only", "dt_only"])
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
     evaluate(args)

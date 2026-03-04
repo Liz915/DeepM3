@@ -131,6 +131,7 @@ def main():
     parser.add_argument("--models", type=str, default="sasrec,tisasrec")
     parser.add_argument("--lrs", type=str, default="1e-4,3e-4,5e-4")
     parser.add_argument("--epochs_list", type=str, default="50,100,150")
+    parser.add_argument("--wds", type=str, default="1e-5")
     parser.add_argument("--hidden_dim", type=int, default=256)
     parser.add_argument("--dataset", type=str, default="ml1m", choices=["ml1m", "amazon"])
     parser.add_argument("--data_dir", type=str, default="")
@@ -149,6 +150,7 @@ def main():
     models = parse_csv_list(args.models, str)
     lrs = parse_csv_list(args.lrs, float)
     epochs_list = parse_csv_list(args.epochs_list, int)
+    wds = parse_csv_list(args.wds, float)
 
     data_dir = args.data_dir or ("data/amazon" if args.dataset == "amazon" else "data")
     out_dir = Path(args.output_dir or f"results/{args.dataset}/baseline_tuning")
@@ -162,76 +164,80 @@ def main():
     neg_pool = build_neg_pool(test_dataset, args.num_neg, args.seed)
 
     rows = []
-    total_runs = len(models) * len(lrs) * len(epochs_list)
+    total_runs = len(models) * len(lrs) * len(epochs_list) * len(wds)
     run_id = 0
 
     for model_name in models:
         for lr in lrs:
-            for epochs in epochs_list:
-                run_id += 1
-                lr_tag = str(lr).replace(".", "p")
-                ckpt_name = (
-                    f"tune_{args.dataset}_{model_name}_d{args.hidden_dim}_"
-                    f"lr{lr_tag}_e{epochs}_s{args.seed}.pth"
-                )
-                ckpt_rel = Path("tuning") / ckpt_name
-                ckpt_path = Path("checkpoints") / ckpt_rel
+            for wd in wds:
+                for epochs in epochs_list:
+                    run_id += 1
+                    lr_tag = str(lr).replace(".", "p")
+                    wd_tag = str(wd).replace(".", "p")
+                    ckpt_name = (
+                        f"tune_{args.dataset}_{model_name}_d{args.hidden_dim}_"
+                        f"lr{lr_tag}_wd{wd_tag}_e{epochs}_s{args.seed}.pth"
+                    )
+                    ckpt_rel = Path("tuning") / ckpt_name
+                    ckpt_path = Path("checkpoints") / ckpt_rel
+    
+                    print("\n" + "-" * 72)
+                    print(
+                        f"[{run_id}/{total_runs}] model={model_name} "
+                        f"lr={lr} wd={wd} epochs={epochs} dim={args.hidden_dim}"
+                    )
 
-                print("\n" + "-" * 72)
-                print(
-                    f"[{run_id}/{total_runs}] model={model_name} "
-                    f"lr={lr} epochs={epochs} dim={args.hidden_dim}"
-                )
+                    cmd = [
+                        "python",
+                        args.train_script,
+                        "--model", model_name,
+                        "--epochs", str(epochs),
+                        "--seed", str(args.seed),
+                        "--hidden_dim", str(args.hidden_dim),
+                        "--dataset", args.dataset,
+                        "--save_name", str(ckpt_rel),
+                        "--lr", str(lr),
+                        "--weight_decay", str(wd),
+                        "--device", args.device,
+                        "--config", args.config,
+                    ]
+                    if args.data_dir:
+                        cmd.extend(["--data_dir", args.data_dir])
+                    run_train(cmd)
 
-                cmd = [
-                    "python",
-                    args.train_script,
-                    "--model", model_name,
-                    "--epochs", str(epochs),
-                    "--seed", str(args.seed),
-                    "--hidden_dim", str(args.hidden_dim),
-                    "--dataset", args.dataset,
-                    "--save_name", str(ckpt_rel),
-                    "--lr", str(lr),
-                    "--device", args.device,
-                    "--config", args.config,
-                ]
-                if args.data_dir:
-                    cmd.extend(["--data_dir", args.data_dir])
-                run_train(cmd)
+                    model = load_baseline(
+                        model_name=model_name,
+                        ckpt_path=str(ckpt_path),
+                        n_items=test_dataset.n_items,
+                        hidden_dim=args.hidden_dim,
+                        config=cfg,
+                        device=device,
+                    )
+                    metrics = evaluate_baseline(
+                        model=model,
+                        model_name=model_name,
+                        dataset=test_dataset,
+                        neg_pool=neg_pool,
+                        device=device,
+                        topk=args.topk,
+                    )
 
-                model = load_baseline(
-                    model_name=model_name,
-                    ckpt_path=str(ckpt_path),
-                    n_items=test_dataset.n_items,
-                    hidden_dim=args.hidden_dim,
-                    config=cfg,
-                    device=device,
-                )
-                metrics = evaluate_baseline(
-                    model=model,
-                    model_name=model_name,
-                    dataset=test_dataset,
-                    neg_pool=neg_pool,
-                    device=device,
-                    topk=args.topk,
-                )
-
-                row = {
-                    "model": model_name,
-                    "lr": lr,
-                    "epochs": epochs,
-                    "hidden_dim": args.hidden_dim,
-                    "seed": args.seed,
-                    "checkpoint": str(ckpt_path),
-                    **metrics,
-                }
-                rows.append(row)
-                print(
-                    f"Result: HR@10={metrics['hr@10']:.4f} "
-                    f"NDCG@10={metrics['ndcg@10']:.4f} "
-                    f"Latency={metrics['latency_ms']:.2f}ms"
-                )
+                    row = {
+                        "model": model_name,
+                        "lr": lr,
+                        "weight_decay": wd,
+                        "epochs": epochs,
+                        "hidden_dim": args.hidden_dim,
+                        "seed": args.seed,
+                        "checkpoint": str(ckpt_path),
+                        **metrics,
+                    }
+                    rows.append(row)
+                    print(
+                        f"Result: HR@10={metrics['hr@10']:.4f} "
+                        f"NDCG@10={metrics['ndcg@10']:.4f} "
+                        f"Latency={metrics['latency_ms']:.2f}ms"
+                    )
 
     if not rows:
         print("No runs executed.")
@@ -247,7 +253,7 @@ def main():
 
     print("\n" + "=" * 72)
     print("Best settings per model:")
-    print(best[["model", "lr", "epochs", "hidden_dim", "hr@10", "ndcg@10", "latency_ms"]].to_string(index=False))
+    print(best[["model", "lr", "weight_decay", "epochs", "hidden_dim", "hr@10", "ndcg@10", "latency_ms"]].to_string(index=False))
     print(f"\nSaved full results: {full_path}")
     print(f"Saved best results: {best_path}")
 
